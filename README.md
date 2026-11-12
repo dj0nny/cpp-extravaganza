@@ -8,8 +8,8 @@ A collection of C++ projects coded during my free time.
 | -- | --------- | ------------------------------------------ | --------------- |
 | 01 | Hello World | An introduction project | ✅ Completed |
 | 02 | Number guessing game | A classic guess-the-number game  | ✅ Completed |
-<!--| 04 | — | —     | —                                           | 🚧 In progress |
-| 05 | — | —     | —                                           | ⏳ Planned     |
+| 03 | To-Do List Manager | persistent to-do list manager | 🚧 In progress |
+<!--| 05 | — | —     | —                                           | ⏳ Planned     |
 | 06 | — | —     | —                                           | ⏳ Planned     |
 | 07 | — | —     | —                                           | ⏳ Planned     |
 | 08 | — | —     | —                                           | ⏳ Planned     |
