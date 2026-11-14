@@ -10,6 +10,7 @@ cmake-build-*/
 *.out
 *.o
 *.obj
+*.txt
 
 # CMake generated files
 CMakeCache.txt
