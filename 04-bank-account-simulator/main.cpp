@@ -1,3 +1,5 @@
+
+#include <cctype>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -38,8 +40,11 @@ void print_menu();
 // Read user's menu action
 int read_menu_action();
 
+// Clean the input stream
+void clean_input(std::istream& is);
+
 // Handle menu's action
-bool handle_menu_action(int menu_action);
+bool handle_menu_action(int menu_action, Account& account, const std::string& file_name);
 
 // Turns a whole number of cents into text such as "$1234.05".
 std::string format_cents(long long cents);
@@ -84,24 +89,10 @@ int main() {
     print_menu();
 
     int menu_action{read_menu_action()};
-    exit = handle_menu_action(menu_action);
+    exit = handle_menu_action(menu_action, current_account.value(), file_name);
 
     std::cout << "\n\n";
   }
-
-  // TODO: For deposits and withdrawals, read the amount as text and convert
-  //       it to cents yourself. Reject non-numbers, negative amounts, zero,
-  //       and anything with more than two decimal places.
-
-  // TODO: Refuse any withdrawal larger than the balance. The balance must
-  //       never drop below zero. Record every accepted transaction.
-
-  // TODO: Print money as dollars and cents with <iomanip>, padding the cents
-  //       to two digits so 5 cents prints as $0.05, not $0.5.
-
-  // TODO: On save and exit, write the owner, the balance, and the history to
-  //       account.txt with a std::ofstream, report whether it worked, and
-  //       return 0.
 
   return 0;
 }
@@ -126,39 +117,98 @@ void print_menu() {
 }
 
 int read_menu_action() {
-  int t_menu_action{};
-
   while (true) {
     std::cout << "Choose an option: ";
 
-    if (!(std::cin >> t_menu_action)) {
-      std::cout << "Invalid input. Please provide a valid number.";
-      std::cin.clear();
-      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    std::string input{};
+    std::getline(std::cin >> std::ws, input);
+
+    std::stringstream ss{input};
+    int menu_action{};
+    char extra{};
+
+    if (!(ss >> menu_action) || (ss >> extra)) {
+      std::cout << "Invalid input. Please choose an option from 1 to 5." << '\n';
       continue;
     }
 
-    return t_menu_action;
+    if (menu_action < 1 || menu_action > 5) {
+      std::cout << "Invalid choice. Please choose an option from 1 to 5." << '\n';
+      continue;
+    }
+
+    return menu_action;
   }
 }
 
-bool handle_menu_action(int menu_action) {
+void clean_input(std::istream& is) {
+  is.clear();
+  is.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+}
+
+bool handle_menu_action(int menu_action, Account& account, const std::string& file_name) {
   switch (static_cast<MenuActions>(menu_action)) {
-    case MenuActions::Deposit:
-      std::cout << "Deposit";
+    // TODO: For deposits and withdrawals, read the amount as text and convert
+    //       it to cents yourself. Reject non-numbers, negative amounts, zero,
+    //       and anything with more than two decimal places.
+    case MenuActions::Deposit: {
+      std::optional<long long> deposit_amount{read_amount("Amount to deposit: ")};
+
+      if (deposit_amount) {
+        deposit(account, *deposit_amount);
+
+        std::cout << "Deposited " << format_cents(*deposit_amount) << "." << '\n';
+        std::cout << "New balance: " << format_cents(account.balance) << ".";
+      } else {
+        std::cout << "That is not a valid amount. Enter something like 25 or 12.50, up to $1000000.00.";
+      }
+
       break;
-    case MenuActions::Withdraw:
-      std::cout << "Withdraw";
+    }
+
+    // TODO: Refuse any withdrawal larger than the balance. The balance must
+    //       never drop below zero. Record every accepted transaction.
+    case MenuActions::Withdraw: {
+      std::optional<long long> withdrawal_amount{read_amount("Amount to withdraw: ")};
+
+      if (!withdrawal_amount) {
+        std::cout << "That is not a valid amount. Enter something like 25 or 12.50, up to $1000000.00.";
+        break;
+      }
+
+      if (withdraw(account, *withdrawal_amount)) {
+        std::cout << "Withdrew " << format_cents(*withdrawal_amount) << "." << '\n';
+        std::cout << "New balance: " << format_cents(account.balance) << ".";
+      } else {
+        std::cout << "Withdrawal refused. You cannot withdraw more than your current balance." << '\n';
+        std::cout << "Current balance: " << format_cents(account.balance) << ".";
+      }
+
       break;
+    }
+
+    // TODO: Print money as dollars and cents with <iomanip>, padding the cents
+    //       to two digits so 5 cents prints as $0.05, not $0.5.
     case MenuActions::ShowBalance:
-      std::cout << "Show balance";
+      std::cout << "Current balance: " << format_cents(account.balance) << ".";
       break;
+
     case MenuActions::ShowStatement:
-      std::cout << "Show Statement";
+      print_statement(account);
       break;
+
+    // TODO: On save and exit, write the owner, the balance, and the history to
+    //       account.txt with a std::ofstream, report whether it worked, and
+    //       return 0.
     case MenuActions::SaveAndExit:
-      std::cout << "Save and exit";
-      return true;
+      if (save_account(account, file_name)) {
+        std::cout << "Saved to account.txt. Goodbye.";
+        return true;
+      }
+
+      std::cout << "Failed to save the account.";
+      break;
+
     default:
       std::cout << "Invalid choice";
   }
@@ -174,4 +224,187 @@ std::string format_cents(long long cents) {
   return os_stream.str();
 }
 
-std::optional<Account> load_account(const std::string& file_name) { return std::nullopt; }
+std::optional<long long> read_amount(std::string_view prompt) {
+  std::cout << prompt;
+
+  std::string amount{};
+
+  if (std::getline(std::cin >> std::ws, amount)) {
+    return parse_amount(amount);
+  }
+
+  return std::nullopt;
+}
+
+std::optional<long long> parse_amount(std::string_view text) {
+  if (text.empty()) {
+    return std::nullopt;
+  }
+
+  constexpr long long max_cents{100000000};
+
+  std::size_t decimal_position{text.find('.')};
+
+  if (decimal_position != std::string_view::npos && text.find('.', decimal_position + 1) != std::string_view::npos) {
+    return std::nullopt;
+  }
+
+  std::string_view whole_part{};
+  std::string_view decimal_part{};
+
+  if (decimal_position == std::string_view::npos) {
+    whole_part = text;
+  } else {
+    whole_part = text.substr(0, decimal_position);
+    decimal_part = text.substr(decimal_position + 1);
+
+    if (decimal_part.empty() || decimal_part.size() > 2) {
+      return std::nullopt;
+    }
+  }
+
+  if (whole_part.empty()) {
+    return std::nullopt;
+  }
+
+  long long whole_amount{};
+
+  for (char ch : whole_part) {
+    if (!std::isdigit(static_cast<unsigned char>(ch))) {
+      return std::nullopt;
+    }
+
+    int digit{ch - '0'};
+
+    if (whole_amount > 1000000LL) {
+      return std::nullopt;
+    }
+
+    whole_amount = whole_amount * 10 + digit;
+
+    if (whole_amount > 1000000LL) {
+      return std::nullopt;
+    }
+  }
+
+  long long cents{whole_amount * 100};
+
+  if (!decimal_part.empty()) {
+    int decimal_cents{decimal_part[0] - '0'};
+
+    if (decimal_part.size() == 2) {
+      decimal_cents = decimal_cents * 10 + (decimal_part[1] - '0');
+    } else {
+      decimal_cents *= 10;
+    }
+
+    cents += decimal_cents;
+  }
+
+  if (cents <= 0 || cents > max_cents) {
+    return std::nullopt;
+  }
+
+  return cents;
+}
+
+void deposit(Account& account, long long cents) {
+  account.balance += cents;
+
+  account.transactions.push_back(Transaction{TransactionType::Deposit, cents, account.balance});
+}
+
+bool withdraw(Account& account, long long cents) {
+  if (cents <= 0 || cents > account.balance) {
+    return false;
+  }
+
+  account.balance -= cents;
+
+  account.transactions.push_back(Transaction{TransactionType::Withdrawal, cents, account.balance});
+
+  return true;
+}
+
+void print_statement(const Account& account) {
+  std::cout << "Statement for " << account.owner << '\n';
+
+  std::cout << std::left << std::setw(18) << "Type" << std::right << std::setw(12) << "Amount" << std::setw(13) << "Balance" << '\n';
+
+  for (const Transaction& transaction : account.transactions) {
+    std::string type;
+
+    if (transaction.type == TransactionType::Deposit) {
+      type = "Deposit";
+    } else {
+      type = "Withdrawal";
+    }
+
+    std::cout << std::left << std::setw(18) << type << std::right << std::setw(12) << format_cents(transaction.cents_amount) << std::setw(13) << format_cents(transaction.balance_after_cents) << '\n';
+  }
+
+  std::cout << "Current balance: " << format_cents(account.balance) << '\n';
+}
+
+bool save_account(const Account& account, const std::string& file_name) {
+  std::ofstream file{file_name};
+
+  if (!file) {
+    return false;
+  }
+
+  file << account.owner << '\n';
+  file << account.balance << '\n';
+
+  for (const Transaction& transaction : account.transactions) {
+    char type{};
+
+    if (transaction.type == TransactionType::Deposit) {
+      type = 'D';
+    } else {
+      type = 'W';
+    }
+
+    file << type << ' ' << transaction.cents_amount << ' ' << transaction.balance_after_cents << '\n';
+  }
+
+  return file.good();
+}
+
+std::optional<Account> load_account(const std::string& file_name) {
+  std::ifstream file{file_name};
+
+  if (!file) {
+    return std::nullopt;
+  }
+
+  Account account{};
+
+  if (!std::getline(file, account.owner)) {
+    return std::nullopt;
+  }
+
+  if (!(file >> account.balance)) {
+    return std::nullopt;
+  }
+
+  char type{};
+  long long amount{};
+  long long balance_after{};
+
+  while (file >> type >> amount >> balance_after) {
+    TransactionType transaction_type{};
+
+    if (type == 'D') {
+      transaction_type = TransactionType::Deposit;
+    } else if (type == 'W') {
+      transaction_type = TransactionType::Withdrawal;
+    } else {
+      return std::nullopt;
+    }
+
+    account.transactions.push_back(Transaction{transaction_type, amount, balance_after});
+  }
+
+  return account;
+}
