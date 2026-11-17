@@ -9,7 +9,8 @@ A collection of C++ projects coded during my free time.
 | 01 | Hello World | An introduction project | ✅ Completed |
 | 02 | Number guessing game | A classic guess-the-number game  | ✅ Completed |
 | 03 | To-Do List Manager | Persistent to-do list manager | ✅ Completed |
-| 04 | Bank Account Simulator | Small command-line banking program | 🚧 In progress |
+| 04 | Bank Account Simulator | Small command-line banking program | ✅ Completed |
+| 05 | Tic-Tac-Toe | Two-player Tic-Tac-Toe game from scratch | 🚧 In progress     |
 <!--| 05 | — | —     | —                                           | 🚧 In progress     |
 | 06 | — | —     | —                                           | ⏳ Planned     |
 | 07 | — | —     | —                                           | ⏳ Planned     |
